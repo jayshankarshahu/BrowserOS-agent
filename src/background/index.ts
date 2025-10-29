@@ -55,12 +55,12 @@ function registerHandlers(): void {
     MessageType.EXECUTE_QUERY,
     (msg, port) => executionHandler.handleExecuteQuery(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.CANCEL_TASK,
     (msg, port) => executionHandler.handleCancelTask(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.RESET_CONVERSATION,
     (msg, port) => executionHandler.handleResetConversation(msg, port)
@@ -87,49 +87,49 @@ function registerHandlers(): void {
     MessageType.GET_LLM_PROVIDERS,
     (msg, port) => providersHandler.handleGetProviders(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.SAVE_LLM_PROVIDERS,
     (msg, port) => providersHandler.handleSaveProviders(msg, port)
   )
-
+  
   // MCP handlers
   messageRouter.registerHandler(
     MessageType.GET_MCP_SERVERS,
     (msg, port) => mcpHandler.handleGetMCPServers(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.CONNECT_MCP_SERVER,
     (msg, port) => mcpHandler.handleConnectMCPServer(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.DISCONNECT_MCP_SERVER,
     (msg, port) => mcpHandler.handleDisconnectMCPServer(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.CALL_MCP_TOOL,
     (msg, port) => mcpHandler.handleCallMCPTool(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.MCP_INSTALL_SERVER,
     (msg, port) => mcpHandler.handleInstallServer(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.MCP_DELETE_SERVER,
     (msg, port) => mcpHandler.handleDeleteServer(msg, port)
   )
-
+  
   messageRouter.registerHandler(
     MessageType.MCP_GET_INSTALLED_SERVERS,
     (msg, port) => mcpHandler.handleGetInstalledServers(msg, port)
   )
-
-
+  
+  
   // Plan generation handlers (for AI plan generation in newtab)
   messageRouter.registerHandler(
     MessageType.GENERATE_PLAN,
@@ -215,7 +215,7 @@ function registerHandlers(): void {
       Logging.log(logMsg.source || 'Unknown', logMsg.message, logMsg.level || 'info')
     }
   )
-
+  
   // Metrics handler
   messageRouter.registerHandler(
     MessageType.LOG_METRIC,
@@ -224,7 +224,7 @@ function registerHandlers(): void {
       Logging.logMetric(event, properties)
     }
   )
-
+  
   // Heartbeat handler - acknowledge heartbeats to keep connection alive
   messageRouter.registerHandler(
     MessageType.HEARTBEAT,
@@ -237,7 +237,7 @@ function registerHandlers(): void {
       })
     }
   )
-
+  
   // Panel close handler
   messageRouter.registerHandler(
     MessageType.CLOSE_PANEL,
@@ -290,33 +290,33 @@ function registerHandlers(): void {
  */
 function handlePortConnection(port: chrome.runtime.Port): void {
   const portId = portManager.registerPort(port)
-
+  
   // Handle sidepanel connections
   if (port.name === 'sidepanel') {
     isPanelOpen = true
     Logging.log('Background', `Side panel connected`)
     Logging.logMetric('side_panel_opened', { source: 'port_connection' })
   }
-
+  
   // Register with logging system
   Logging.registerPort(port.name, port)
-
+  
   // Set up message listener
   port.onMessage.addListener((message: PortMessage) => {
     messageRouter.routeMessage(message, port)
   })
-
+  
   // Set up disconnect listener
   port.onDisconnect.addListener(() => {
     portManager.unregisterPort(port)
-
+    
     // Update panel state if this was the sidepanel
     if (port.name === 'sidepanel') {
       isPanelOpen = false
       Logging.log('Background', `Side panel disconnected`)
       Logging.logMetric('side_panel_closed', { source: 'port_disconnection' })
     }
-
+    
     // Unregister from logging
     Logging.unregisterPort(port.name)
   })
@@ -327,9 +327,9 @@ function handlePortConnection(port: chrome.runtime.Port): void {
  */
 async function toggleSidePanel(tabId: number): Promise<void> {
   if (isPanelToggling) return
-
+  
   isPanelToggling = true
-
+  
   try {
     if (isPanelOpen) {
       // Signal sidepanel to close itself
@@ -345,7 +345,7 @@ async function toggleSidePanel(tabId: number): Promise<void> {
     }
   } catch (error) {
     Logging.log('Background', `Error toggling side panel: ${error}`, 'error')
-
+    
     // Try fallback with windowId
     if (!isPanelOpen) {
       try {
@@ -371,36 +371,84 @@ async function toggleSidePanel(tabId: number): Promise<void> {
  */
 function registerNotificationListeners() {
 
-  // event listener to listen for detecting when browser is opened/resumed
-  chrome.windows.onFocusChanged.addListener((windowId) => {
+  // key: notificationId , value: windowId
+  const windowIds = new Map<string, number>();
 
-    // windowId is not none that means window is focues
-    if( windowId !== chrome.windows.WINDOW_ID_NONE ) {
+  // key: windowId , value: notificationId[]
+  const notificationIds = new Map<number, Array<string>>();
 
-      //clear all notifications because browser is in focus now
-      chrome.notifications.getAll((notifications) => {
+  const getNotificationIds = (windowId: number): Array<string> => {
 
-        Object.keys(notifications).forEach(id => {
-          chrome.notifications.clear(id);
-        })
-
-      })
-
+    if( !notificationIds.has(windowId) ) {
+      return [];
     }
-    
+
+    return notificationIds.get(windowId)!;
+
+  }
+
+  // event listener to listen for detecting when browser is opened/resumed
+  chrome.windows.onFocusChanged.addListener(async (windowId) => {
+
+    // windowId is not none when all chrome windows 
+    // are out of focus that means no notification needs to be cleared
+    if (windowId == chrome.windows.WINDOW_ID_NONE) {
+      return;
+    }
+
+    const data = getNotificationIds(windowId);
+
+    data.forEach( notificationId => {
+      chrome.notifications.clear(notificationId);
+    } )
+
+    notificationIds.delete(windowId);
+
   });
 
   //handle click of notification
-  chrome.notifications.onClicked.addListener((noticationId) => {
+  chrome.notifications.onClicked.addListener((notificationId) => {
 
     // clear notification
-    chrome.notifications.clear(noticationId);
 
-    chrome.windows.getCurrent((window) => {
+    const windowId = windowIds.get(notificationId);
+
+    if( windowId ) {
+
       //open browser window
-      chrome.windows.update(window.id!, { focused: true });
-    });
+      chrome.windows.update( windowId , { focused: true });
+      windowIds.delete(notificationId);
 
+      // Not clearing `notificationId` from `notficationIds` map here becaue
+      // the above code will open browser window and it will be cleared in the 
+      // `onFocusChange` handler
+    } else {
+      console.info("window if not found for notification" , notificationId);
+    }
+
+    chrome.notifications.clear(notificationId);
+
+  });
+
+  //listener for sending notification
+  chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    if (request.action === "send-notification") {
+      const windowId = request.windowId;
+
+      //setting window if against notification so that it can be used to clear notification when the window opens
+      chrome.notifications.create(request.options, async (notificationId) => {
+        if (windowId) {
+          let existingNotificationIds = getNotificationIds(windowId!);
+          existingNotificationIds.push(notificationId);
+          
+          notificationIds.set(windowId!, existingNotificationIds);
+          windowIds.set(notificationId, windowId!);
+          console.log("setting window id", notificationId, windowId, windowIds);
+        }
+        sendResponse(notificationId);
+      });
+    }
+    return true;
   });
 
 }
@@ -463,7 +511,7 @@ function initialize(): void {
 
   // Set up port connection listener
   chrome.runtime.onConnect.addListener(handlePortConnection)
-
+  
   // Set up extension icon click handler
   chrome.action.onClicked.addListener(async (tab) => {
     Logging.log('Background', 'Extension icon clicked')
@@ -471,7 +519,7 @@ function initialize(): void {
       await toggleSidePanel(tab.id)
     }
   })
-
+  
   // Set up keyboard shortcut handler
   chrome.commands.onCommand.addListener(async (command) => {
     if (command === 'toggle-panel') {
@@ -482,13 +530,13 @@ function initialize(): void {
       }
     }
   })
-
+  
   // Clean up on tab removal
   chrome.tabs.onRemoved.addListener(async (tabId) => {
     // With singleton execution, just log the tab removal
     Logging.log('Background', `Tab ${tabId} removed`)
   })
-
+  
   // Handle messages from newtab only
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'NEWTAB_EXECUTE_QUERY') {
@@ -496,10 +544,9 @@ function initialize(): void {
       return true  // Keep message channel open for async response
     }
   })
-
+  
   Logging.log('Background', 'Nxtscape extension initialized successfully')
 }
 
 // Initialize the extension
 initialize()
-

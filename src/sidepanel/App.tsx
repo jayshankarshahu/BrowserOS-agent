@@ -111,7 +111,7 @@ export function App() {
         title: "Human input needed", 
         message: humanInputRequest.prompt,
         type: 'basic',
-        iconUrl: 'assets/icon48.png',
+        iconUrl: chrome.runtime.getURL('assets/icon48.png'),
         isClickable: true,
         requireInteraction: true,
       });
