@@ -15,12 +15,11 @@ export function usePushNotification() {
     return new Promise(async (resolve, reject) => {
       try {
         const { id: windowId } = await chrome.windows.getCurrent();
-        
-        chrome.runtime.sendMessage({
-          action: "send-notification",
-          options,
-          windowId
-        }, (response) => {
+    
+        // Not checking windowId for undefined here because it is already being checked in the background script
+        // And sending the notification has more priority than saving windowId
+  
+        chrome.runtime.sendMessage({ action: "send-notification", options, windowId }, (response) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
             return;

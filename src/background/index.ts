@@ -398,9 +398,7 @@ function registerNotificationListeners() {
 
     const data = getNotificationIds(windowId);
 
-    data.forEach( notificationId => {
-      chrome.notifications.clear(notificationId);
-    } )
+    data.forEach(notificationId => chrome.notifications.clear(notificationId));
 
     notificationIds.delete(windowId);
 
@@ -409,11 +407,10 @@ function registerNotificationListeners() {
   //handle click of notification
   chrome.notifications.onClicked.addListener((notificationId) => {
 
-    // clear notification
 
     const windowId = windowIds.get(notificationId);
 
-    if( windowId ) {
+    if( windowId !== undefined ) {
 
       //open browser window
       chrome.windows.update( windowId , { focused: true });
@@ -422,10 +419,9 @@ function registerNotificationListeners() {
       // Not clearing `notificationId` from `notficationIds` map here becaue
       // the above code will open browser window and it will be cleared in the 
       // `onFocusChange` handler
-    } else {
-      console.info("window if not found for notification" , notificationId);
     }
 
+    // clear notification
     chrome.notifications.clear(notificationId);
 
   });
@@ -443,7 +439,6 @@ function registerNotificationListeners() {
           
           notificationIds.set(windowId!, existingNotificationIds);
           windowIds.set(notificationId, windowId!);
-          console.log("setting window id", notificationId, windowId, windowIds);
         }
         sendResponse(notificationId);
       });

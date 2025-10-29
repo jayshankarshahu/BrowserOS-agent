@@ -103,20 +103,31 @@ export function App() {
 
   // show push notification if human input is needed and browser is hidden
   useEffect(() => {
-    
-    // document.hidden may incorrect values in some linux distros , but it works in most
-    if (humanInputRequest && document.hidden) {
 
-      sendNotification({ 
-        title: "Human input needed", 
-        message: humanInputRequest.prompt,
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('assets/icon48.png'),
-        isClickable: true,
-        requireInteraction: true,
-      });
+    (async () => {
 
-    }
+      const { id: windowId } = await chrome.windows.getCurrent();
+
+      if( windowId === undefined ) {
+        return;
+      }
+
+      const window = await chrome.windows.get(windowId);
+
+      if (humanInputRequest && !window.focused) {
+
+        sendNotification({
+          title: "Human input needed",
+          message: humanInputRequest.prompt,
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('assets/icon48.png'),
+          isClickable: true,
+          requireInteraction: true,
+        });
+
+      }
+
+    })()
 
   }, [humanInputRequest]);
   
